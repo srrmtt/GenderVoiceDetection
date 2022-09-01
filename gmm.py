@@ -3,7 +3,7 @@ import scipy
 
 
 import utility as util
-
+import dcf
 
 def logpdf_GAU_ND_Opt(X, mu, C):
     # function for the log likelihood 
@@ -32,8 +32,12 @@ def GMM_ll_perSample(X, gmm):
         S[g, :] = logpdf_GAU_ND_Opt(X, gmm[g][1], gmm[g][2]) + numpy.log(gmm[g][0])
        
     # take the sum of the exponential of the row of matrix Joint
-    return scipy.special.logsumexp(S, axis=0)
 
+    return scipy.special.logsumexp(S, axis=0)
+def mrow(v):
+    return v.reshape((1, v.shape[0]))
+def mcol(v):
+    return v.reshape((v.shape[0], 1))
 # gmm: initial gmm
 def GMM_EM(X, gmm, full_cov=True, threshold=1e-6, psi=0.01,tied=False):
     # ll of the current gmm
@@ -66,23 +70,23 @@ def GMM_EM(X, gmm, full_cov=True, threshold=1e-6, psi=0.01,tied=False):
             Z = gamma.sum()
             # first order and second order statistics
             # evaluate F with broadcasting
-            F = (util.vrow(gamma) * X).sum(1)
-            S = numpy.dot(X ,(util.vrow(gamma) * X).T)
+            F = (mrow(gamma) * X).sum(1)
+            S = numpy.dot(X ,(mrow(gamma) * X).T)
             # weight
             w = Z / N
             # mean
-            mu = util.vcol(F / Z)
+            mu = mcol(F / Z)
             # covariance matrix
             Sigma = S/Z - numpy.dot(mu, mu.T)
             #print('Sigma: ',Sigma)
             if(full_cov == False):
                 Sigma = Sigma * numpy.eye(Sigma.shape[0])
-            Sigma = constrEigenvaluesCovMat(Sigma, psi)
+            #Sigma = constrEigenvaluesCovMat(Sigma, psi)
             if tied:
                 tiedCov+=w*Sigma
                 Sigma = tiedCov
             gmmNew.append((w, mu, Sigma))
-        
+      
         gmm = gmmNew
         # check if the llNew in increasing used for bugs
         if(llNew < lastll and lastll != 0):
@@ -108,7 +112,9 @@ def LBG(gmms, alpha):
     ret = []
 
     for gmm in gmms:
-        gmm1, gmm2 = split(gmm, alpha)
+        C = constrEigenvaluesCovMat(gmm[2], 0.01)
+        gmmConstr = (gmm[0], gmm[1], C)
+        gmm1, gmm2 = split(gmmConstr, alpha)
         ret.append(gmm1)
         ret.append(gmm2)
     
@@ -120,7 +126,7 @@ def constrEigenvaluesCovMat(C, psi):
     U, s, _ = numpy.linalg.svd(C)
     #print("s:", s)
     s[s<psi] = psi
-    new_C = numpy.dot(U, util.vcol(s) * U.T)
+    new_C = numpy.dot(U, mcol(s) * U.T)
     
     return new_C
 
@@ -129,8 +135,8 @@ def diag_cov(DTR):
     C = empirical_cov(DTR)
     return C * numpy.eye(C.shape[0])
 # compute_cov, alpha, stopping_criterion, G, psi, cov_type='full',tied=False
-def GMM(DTR, DTE, LTR, priors, params={}):
-
+def GMM(DTR, DTE, LTR, params={}):
+    priors = params.setdefault('priors', [0.5, 0.5])
     alpha = params.setdefault('alpha', 0.1)
     stopping_criterion = params.setdefault('stopping_criterion', 10**-6)
     G = params.get('G')
@@ -148,7 +154,8 @@ def GMM(DTR, DTE, LTR, priors, params={}):
         ll_for_class = []
         class_data = DTR[:, LTR == i]
         Sigma = constrEigenvaluesCovMat(compute_cov(class_data), psi)
-        start_gmm = [(1, util.vcol(numpy.mean(class_data, 1 )), Sigma)]
+        start_gmm = [(1, mcol(numpy.mean(class_data, 1 )), Sigma)]
+        
         print("\t\tprocessing class:", i)
         lbg_gmm = start_gmm
         for j in range(G):
@@ -158,12 +165,16 @@ def GMM(DTR, DTE, LTR, priors, params={}):
             ll = GMM_ll_perSample(DTE, new_gmm)
             ll_for_class.append(ll)
             lbg_gmm = LBG(start_gmm, alpha)
-            
+            for i,gmm in enumerate(lbg_gmm):
+                Cconstr = constrEigenvaluesCovMat(gmm[2], psi)
+                lbg_gmm[i] = (gmm[0], gmm[1], Cconstr)
         lls.append(ll_for_class)
     llrs = []
     
-    for i in range(G):
-        for j in range(2):
-            llr = lls[1][i] - lls[0][i] 
-            llrs.append(llr)
-    return numpy.vstack(llrs)
+    for i in range(G):  
+        llr = lls[1][i] - lls[0][i]    
+        llrs.append(llr)
+    llrs = numpy.vstack(llrs)
+    print("llrs shape", llrs.shape)
+    return llrs
+

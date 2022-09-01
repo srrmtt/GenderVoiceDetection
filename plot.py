@@ -4,6 +4,7 @@ import  pylab
 import dcf 
 import utility as util
 import logistic_regression as lr
+import svm
 def plot_features_distr(D, labels, features):
     n_features = len(features)
 
@@ -112,8 +113,8 @@ def plot_ROC(llrs, labels):
         pylab.plot(FPR, TPR)
         pylab.show
 
-def plot_min_DCF(folds, folds_labels, k, applications):
-    lambdas = numpy.linspace(10**-6, 10, 100)
+def plot_min_DCF_logreg(folds, folds_labels, k, applications, quadratic=False):
+    lambdas = [1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 8e-3, 1e-2, 2e-2, 5e-2, 1e-1, 0.3, 0.5, 1, 5, 10, 50, 100]
     colors = ['b', 'r', 'g']
     app_labels = ['minDCF(pi=0.5)', 'minDCF(pi=0.1)', 'minDCF(pi=0.9)'] 
     #print("lambdas:", lambdas)
@@ -124,7 +125,11 @@ def plot_min_DCF(folds, folds_labels, k, applications):
         Cfp = application[2]
         classPriors = [pi, 1-pi]
         for l in lambdas:
-            STE = util.k_folds(folds, folds_labels, k, lr.logreg, classPriors, lambda_=l)
+            print("for lambda:", l)
+            if quadratic:
+                STE = util.k_folds(folds, folds_labels, k, lr.logreg, priors=classPriors, lambda_=l)
+            else:
+                STE = util.k_folds(folds, folds_labels, k, lr.quadratic_logreg, priors=classPriors, lambda_=l)
             scores = numpy.hstack(STE)
             DCF = dcf.compute_min_DCF(scores, numpy.hstack(folds_labels), pi, Cfn, Cfp)
             DCFs.append(DCF)
@@ -133,6 +138,50 @@ def plot_min_DCF(folds, folds_labels, k, applications):
         plt.xlabel('lambda')
         plt.ylabel('DCF')
         plt.plot(lambdas, DCFs, color=colors[i], label=app_labels[i])
+        plt.legend()
+    plt.show()
+
+def plot_min_DCF_svm(folds, folds_labels, k, applications):
+    Cs = [0.005, 0.02,0.05, 0.10, 0.20, 0.30, 0.5, 0.8, 1, 5, 10, 20, 50]
+    colors = ['b', 'r', 'g']
+    app_labels = ['minDCF(pi=0.5)', 'minDCF(pi=0.1)', 'minDCF(pi=0.9)'] 
+    for i, application in enumerate(applications):
+        DCFs = []
+        pi, Cfn, Cfp = application
+        classPriors = [pi, 1-pi]
+        for C in Cs:
+            scores = util.k_folds(folds, folds_labels, k, svm.train_SVM_linear, C = C)
+            scores = numpy.hstack(scores)
+            minDCF = dcf.compute_min_DCF(scores, numpy.hstack(folds_labels), pi, Cfn, Cfp)
+            DCFs.append(minDCF)
+        DCFs = numpy.array(DCFs)
+        plt.ylim(0, 1)
+        plt.xscale('log')
+        plt.xlabel('C')
+        plt.ylabel('DCF for linear SVM')
+        plt.plot(Cs, DCFs.ravel(), color=colors[i], label=app_labels[i])
+        plt.legend()
+    plt.show()
+
+def plot_min_DCF_RBFsvm(folds, folds_labels, k, gammas):
+    Cs = [0.005, 0.01,0.02,0.05, 0.08, 0.10, 0.20, 0.30, 0.5, 0.8, 1, 3, 5, 10, 20, 50]
+    colors = ['b', 'r', 'g']
+    app_labels = ['log(\u03BB)=-1', 'log(\u03BB)=-2', 'log(\u03BB)=-3'] 
+    for i in range(3):
+        DCFs = []
+        pi, Cfn, Cfp = (0.5, 1, 1)
+        classPriors = [pi, 1-pi]
+        for C in Cs:
+            scores = util.k_folds(folds, folds_labels, k, svm.train_non_linear_SVM, kernel='rbf', gamma=gammas[i], C=C)
+            scores = numpy.hstack(scores)
+            minDCF = dcf.compute_min_DCF(scores, numpy.hstack(folds_labels), pi, Cfn, Cfp)
+            DCFs.append(minDCF)
+        DCFs = numpy.array(DCFs)
+        plt.ylim(0, 1)
+        plt.xscale('log')
+        plt.xlabel('C')
+        plt.ylabel('DCF for linear SVM')
+        plt.plot(Cs, DCFs.ravel(), color=colors[i], label=app_labels[i])
         plt.legend()
     plt.show()
 

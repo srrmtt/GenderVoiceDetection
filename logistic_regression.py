@@ -3,6 +3,31 @@ import numpy
 
 import utility as util
 
+def quadratic_trasformation(DTR: numpy.ndarray, DTE: numpy.ndarray):
+    n_T = DTR.shape[1]
+    n_E = DTE.shape[1]
+    n_F = DTE.shape[0]
+    n_F = n_F**2 + n_F
+    quad_DTR = numpy.zeros((n_F, n_T))
+    quad_DTE = numpy.zeros((n_F, n_E))
+    for i in range(n_T):
+        x = DTR[:, i:i+1]
+        quad_DTR[:, i:i+1] = stack(x)
+    for i in range(n_E):
+        x = DTE[:, i:i+1]
+        quad_DTE[:, i:i+1] = stack(x)
+    return quad_DTR, quad_DTE
+
+
+def stack(array):
+    n_F = array.shape[0]
+    xxT = array @ array.T
+    column = numpy.zeros((n_F ** 2 + n_F, 1))
+    for i in range(n_F):
+        column[i*n_F:i*n_F + n_F, :] = xxT[:, i:i+1]
+    column[n_F ** 2: n_F ** 2 + n_F, :] = array
+    return column
+
 def logreg_obj_wrap(D, labels, lam, priors):
     # Z = 1 id class = 1; -1 otherwise
     Z = labels * 2.0 - 1.0
@@ -23,16 +48,19 @@ def logreg_obj_wrap(D, labels, lam, priors):
 
     return logreg_obj
 
-# usage
-
-def logreg(DTR, DTE, labels, priors, params):
+def logreg(DTR, DTE, labels, params):
+    priors = params['priors']
     lambda_ = params['lambda_']
     logreg_obj = logreg_obj_wrap(DTR, labels, lambda_, priors)
     _v, _J, _d = scipy.optimize.fmin_l_bfgs_b(logreg_obj, numpy.zeros(DTE.shape[0] + 1), approx_grad=True)
     _w = _v[0:DTE.shape[0]]
     _b = _v[-1]
     STE = numpy.dot(_w.T, DTE) + _b
-    LP = STE > 0
+
     
     return STE
+
+def quadratic_logreg(DTR, DTE, LTE, params):
+    DTR_quad, DTE_quad = quadratic_trasformation(DTR, DTE)
     
+    return logreg(DTR_quad, DTE_quad, LTE, params)

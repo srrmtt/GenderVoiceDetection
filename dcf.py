@@ -51,7 +51,7 @@ def compute_min_DCF(scores, labels, pi, Cfn, Cfp):
     for _th in t:
         dcfList.append(compute_act_DCF(scores, labels, pi, Cfn, Cfp, th= _th))
     minDCF = numpy.array(dcfList).min()
-    #print("minDCF:", minDCF)
+    print("\t\tminDCF:", minDCF)
     return minDCF
 
 def bayes_error_plot(pArray, scores, labels, minCost=False):
@@ -74,7 +74,7 @@ def GMM_minDCF(folds_component_llrs, folds_labels, G, k, application):
             scores.append(folds_component_llrs[j][i])
         scores = numpy.hstack(scores)
         print("scores", scores.shape, "labels",numpy.hstack(folds_labels).shape)
-        minDCF = compute_min_DCF(scores, numpy.hstack(folds_labels), pi, Cfn, Cfp)
+        minDCF = compute_min_DCF(scores, numpy.hstack(folds_labels), 0.5, 1, 1)
         print("\t\t[", 2**i,"] components")
         print("\t\t\tminDCF:", minDCF)
         minDCFs.append(minDCF)

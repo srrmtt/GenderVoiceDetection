@@ -12,21 +12,30 @@ def ML_GAU(D):
     C = np.dot(D-mu, (D-mu).T) / float(D.shape[1])
     return mu, C
 
+def computeTiedCovariance(D, L):
+    C = np.zeros((D.shape[0],D.shape[0]))
+    for lab in [0, 1]:
+        Dlab = D[:, L == lab]
+        C += ML_GAU(Dlab)[1] * float(Dlab.shape[1])
+    return C / D.shape[1]
 
-def MVG(DTR, DTE, LTR, classPriors, type_, classes=[0,1]):
+def MVG(DTR, DTE, LTR, params, classes=[0,1]):
     h = {}
-    diag = type_.setdefault('diag', False)
-    tied = type_.setdefault('tied', False)
+    classPriors = params.setdefault('priors', [0.5, 0.5])
+    diag = params.setdefault('diag', False)
+    tied = params.setdefault('tied', False)
+
     for lab in classes:
         if tied:
-            mu, C = ML_GAU(DTR)
+            mu = util.vcol(DTR[:, LTR == lab].mean(1))
+            C = computeTiedCovariance(DTR, LTR)
         else:
             mu, C = ML_GAU(DTR[:, LTR == lab])
         if diag:
             C = np.eye(C.shape[0]) * C
         h[lab] = (mu, C)
     
-    logSJoint = np.zeros((3, DTE.shape[1]))
+    logSJoint = np.zeros((2, DTE.shape[1]))
 
     for lab in classes:
         mu, C = h[lab]
