@@ -1,5 +1,6 @@
 import numpy
 import matplotlib.pyplot as plt
+import matplotlib
 import  pylab
 import dcf 
 import utility as util
@@ -93,26 +94,6 @@ def plot_heatmap(D, features, color):
     fig.tight_layout()
     plt.show()
 
-def plot_ROC(llrs, labels):
-    thresholds = numpy.array(llrs)
-    thresholds.sort()
-    thresholds = numpy.concatenate([numpy.array([-numpy.inf]), thresholds, numpy.array(numpy.inf)])
-
-    FPR = numpy.zeros(thresolds.size)
-    TPR = numpy.zeros(thresholds.size)
-
-    for idx, t in enumerate(thresholds):
-        pred = numpy.int32(llrs > t)
-        conf = numpy.zeros((2,2))
-
-        for i in range(2):
-            for j in range(2):
-                conf[i,j] = ((pred ==i) * (labels == i)).sum()
-        TPR[idx] = conf[1,1] / (conf[1,1] + conf[0,1])
-        FPR[idx] = conf[1,0] / (conf[1,0] + conf[0,0])
-
-        pylab.plot(FPR, TPR)
-        pylab.show
 
 def plot_min_DCF_logreg(folds, folds_labels, k, applications, quadratic=False):
     lambdas = [1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 8e-3, 1e-2, 2e-2, 5e-2, 1e-1, 0.3, 0.5, 1, 5, 10, 50, 100]
@@ -239,3 +220,71 @@ def plot_minDCF_GMM_hist(DCFsA, DCFsB, G, filename='plot'):
 
     plt.show()
     
+def DETCurve(fps,fns):
+    """
+    Given false positive and false negative rates, produce a DET Curve.
+    The false positive rate is assumed to be increasing while the false
+    negative rate is assumed to be decreasing.
+    """
+    axis_min = min(fps[0],fns[-1])
+    fig,ax = plt.subplots()
+    plt.plot(fps,fns)
+    plt.yscale('log')
+    plt.xscale('log')
+    ticks_to_use = [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,20,50]
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.set_xticks(ticks_to_use)
+    ax.set_yticks(ticks_to_use)
+    plt.axis([0.001,50,0.001,50])
+    plt.show()
+
+def compute_DET_points(llr, L):
+    tresholds = numpy.concatenate([numpy.array([-numpy.inf]),numpy.sort(llr),numpy.array([numpy.inf])])
+    N_label0 = (L == 0).sum()
+    N_label1 = (L == 1).sum()
+    DET_points_FNR = numpy.zeros(L.shape[0] +2 )
+    DET_points_FPR = numpy.zeros(L.shape[0] +2 )
+    for (idx,t) in enumerate(tresholds):
+        pred = 1 * (llr > t)
+        FNR = 1 - (numpy.bitwise_and(pred == 1, L == 1 ).sum() / N_label1)
+        FPR = numpy.bitwise_and(pred == 1, L == 0).sum() / N_label0
+        DET_points_FNR[idx] = FNR
+        DET_points_FPR[idx] = FPR
+    return DET_points_FNR, DET_points_FPR
+
+def plot_ROC(llr, L):
+    ROC_points_TPR, ROC_points_FPR = compute_ROC_points(llr, L)
+    plt.plot(ROC_points_FPR, ROC_points_TPR, color='r')
+    plt.xlabel("FPR")
+    plt.ylabel("TPR")
+    plt.grid()
+    plt.show()
+
+def compute_ROC_points(llr, L):
+    tresholds = numpy.concatenate([numpy.array([-numpy.inf]),numpy.sort(llr),numpy.array([numpy.inf])])
+    N_label0 = (L == 0).sum()
+    N_label1 = (L == 1).sum()
+    ROC_points_TPR = numpy.zeros(L.shape[0] +2 )
+    ROC_points_FPR = numpy.zeros(L.shape[0] +2 )
+    for (idx,t) in enumerate(tresholds):
+        pred = 1 * (llr > t)
+        TPR = numpy.bitwise_and(pred == 1, L == 1 ).sum() / N_label1
+        FPR = numpy.bitwise_and(pred == 1, L == 0).sum() / N_label0
+        ROC_points_TPR[idx] = TPR
+        ROC_points_FPR[idx] = FPR
+    return ROC_points_TPR, ROC_points_FPR
+
+def plot_DET3(llr, L):
+    DET_points_TPR1, DET_points_FPR1 = compute_DET_points(llr, L)
+    
+    plt.plot(DET_points_FPR1, DET_points_TPR1, color='r')
+
+    plt.xlabel("FPR")
+    plt.ylabel("FNR")
+    
+    plt.xscale('log')
+   
+    plt.legend()
+    plt.grid()
+    plt.show()
