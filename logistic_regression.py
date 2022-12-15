@@ -54,7 +54,7 @@ def logreg(DTR, DTE, labels, params):
     priors = params['priors']
     lambda_ = params['lambda_']
     
-    logreg_obj = logreg_obj_wrap(DTR, labels, lambda_, priors, balanced)
+    logreg_obj = logreg_obj_wrap(DTR, labels, lambda_, priors)
     _v, _J, _d = scipy.optimize.fmin_l_bfgs_b(logreg_obj, numpy.zeros(DTE.shape[0] + 1), approx_grad=True)
     _w = _v[0:DTE.shape[0]]
     _b = _v[-1]

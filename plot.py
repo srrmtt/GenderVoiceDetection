@@ -98,6 +98,8 @@ def plot_heatmap(D, features, color):
 def plot_min_DCF_logreg(folds, folds_labels, k, applications, quadratic=False):
     lambdas = [1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 8e-3, 1e-2, 2e-2, 5e-2, 1e-1, 0.3, 0.5, 1, 5, 10, 50, 100]
     colors = ['b', 'r', 'g']
+    quadratic_ = "quadratic" if quadratic else "linear" 
+    PATH = f"./plots/LogReg/{quadratic}-minDCF.png"
     app_labels = ['minDCF(pi=0.5)', 'minDCF(pi=0.1)', 'minDCF(pi=0.9)'] 
     #print("lambdas:", lambdas)
     for i, application in enumerate(applications):
@@ -108,7 +110,7 @@ def plot_min_DCF_logreg(folds, folds_labels, k, applications, quadratic=False):
         classPriors = [pi, 1-pi]
         for l in lambdas:
             print("for lambda:", l)
-            if quadratic:
+            if not quadratic:
                 STE = util.k_folds(folds, folds_labels, k, lr.logreg, priors=classPriors, lambda_=l)
             else:
                 STE = util.k_folds(folds, folds_labels, k, lr.quadratic_logreg, priors=classPriors, lambda_=l)
@@ -117,10 +119,12 @@ def plot_min_DCF_logreg(folds, folds_labels, k, applications, quadratic=False):
             DCFs.append(DCF)
         plt.ylim(0, 1)
         plt.xscale('log')
+        plt.title(f"DCF {quadratic_} logistic regression")
         plt.xlabel('lambda')
         plt.ylabel('DCF')
         plt.plot(lambdas, DCFs, color=colors[i], label=app_labels[i])
         plt.legend()
+    plt.savefig(PATH, format='png')
     plt.show()
 
 def plot_min_DCF_svm(folds, folds_labels, k, applications, balanced=False):
