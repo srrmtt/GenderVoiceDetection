@@ -23,17 +23,22 @@ def load_dataset(filename):
     f.close()
     return np.hstack(vettList), np.array(labels)
 
+def preprocess_Z_score(DTR, DTE):
+    print("Z-Scoring...")
+    mu = util.vcol(DTR.mean(1))
+    std = util.vcol(DTR.std(1))
+    return (DTR - mu) / std, (DTE - mu) / std
+
 def z_norm(D):
-    list_norm = []
-    for i in range(N_SHAPES):
-        column = D[i, :]
-        mu = np.mean(column)
-        sigma = np.cov(column)
-        column_norm = (column - mu) / sigma
-        list_norm.append(column_norm)
-    return np.vstack(list_norm)
+    mu = util.vcol(D.mean(1))
+    std = util.vcol(D.std(1))
+    return (D - mu) / std
 
-
+def shuffle(D, L):
+    shuffled_index = np.random.RandomState(seed=498540).permutation(D.shape[1])
+    Dshaf = D[:, shuffled_index]
+    Lshaf = L[shuffled_index]
+    return Dshaf, Lshaf
 def make_folds(D, labels, k):
     # shuffle dataset 1234567
     shuffled_index = np.random.RandomState(seed=498540).permutation(D.shape[1])
@@ -77,7 +82,7 @@ def PCA(D, m):
 
     # project points
     DP = np.dot(P.T, D)
-    return DP
+    return P
 
 def compute_SwSb(D, L, classes):
     SB = 0
@@ -98,5 +103,5 @@ def LDA(D, L, classes, m = 1):
     s, U = scipy.linalg.eigh(SB, SW)
     w = U[:, ::-1][:,0:m]
 
-    DP = np.dot(w.T, D)
-    return DP
+    
+    return w

@@ -17,7 +17,7 @@ def compute_err_rate(prediction, labels):
     return ((prediction == labels).sum() / labels.size)
 
 
-def k_folds(folds, labels, k, method, PCA_enabled=False, m=None, **params):
+def k_folds(folds, labels, k, method, PCA_enabled=False, m=None, preprocessing=True, **params):
     scores = []
     # iterate over 0 ... k
     for i in range(k):
@@ -28,8 +28,13 @@ def k_folds(folds, labels, k, method, PCA_enabled=False, m=None, **params):
         DVAL = np.array(folds[i])
         if PCA_enabled:
             print("WARNING: PCA enabled ---- dimensionality reduction m:", m)
-            DTR = prep.PCA(DTR, m)
-            DVAL = prep.PCA(DVAL, m)
+            P = prep.PCA(DTR, m)
+            DTR = np.dot(P.T, DTR)
+            DVAL = np.dot(P.T, DVAL)
+        if preprocessing:
+            print("Z-Normalization ----- enabled")
+            DTR, DVAL = prep.preprocess_Z_score(DTR, DVAL)
+           
         # respective labels
         LTR = np.hstack([labels[i] for i in index_folds])
         LTE = np.array(labels[i])

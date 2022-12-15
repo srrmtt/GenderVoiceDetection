@@ -24,6 +24,7 @@ def plot_features_distr(D, labels, features):
 
         plt.legend()
         plt.show()
+        
 
 def plot_relation_beetween_feautures(D, labels, features):
     n_features = len(features)
@@ -141,7 +142,9 @@ def plot_min_DCF_logreg(folds, folds_labels, k, applications, quadratic=False):
         plt.legend()
     plt.show()
 
-def plot_min_DCF_svm(folds, folds_labels, k, applications):
+def plot_min_DCF_svm(folds, folds_labels, k, applications, balanced=False):
+    balanced_ = "balanced" if balanced else "not balanced" 
+    PATH = f"./plots/SVM/linear-{balanced_}-minDCF.png"
     Cs = [0.005, 0.02,0.05, 0.10, 0.20, 0.30, 0.5, 0.8, 1, 5, 10, 20, 50]
     colors = ['b', 'r', 'g']
     app_labels = ['minDCF(pi=0.5)', 'minDCF(pi=0.1)', 'minDCF(pi=0.9)'] 
@@ -150,20 +153,50 @@ def plot_min_DCF_svm(folds, folds_labels, k, applications):
         pi, Cfn, Cfp = application
         classPriors = [pi, 1-pi]
         for C in Cs:
-            scores = util.k_folds(folds, folds_labels, k, svm.train_SVM_linear, C = C)
+            scores = util.k_folds(folds, folds_labels, k, svm.train_SVM_linear, C = C, balanced=balanced)
             scores = numpy.hstack(scores)
             minDCF = dcf.compute_min_DCF(scores, numpy.hstack(folds_labels), pi, Cfn, Cfp)
             DCFs.append(minDCF)
         DCFs = numpy.array(DCFs)
         plt.ylim(0, 1)
+        
+        plt.title(f"minDCF for linear SVM ({balanced_})")
         plt.xscale('log')
         plt.xlabel('C')
-        plt.ylabel('DCF for linear SVM')
+        plt.ylabel('DCF')
         plt.plot(Cs, DCFs.ravel(), color=colors[i], label=app_labels[i])
         plt.legend()
+    plt.save_fig(PATH, format="png")
+    plt.show()
+    
+def plot_min_DCF_poly_svm(folds, folds_labels, k, applications, degree=2.0, balanced=False):
+    balanced_ = "balanced" if balanced else "not balanced" 
+    PATH = f"./plots/SVM/poly{int(degree)}-{balanced_}-minDCF.png"
+    Cs = [0.005, 0.02,0.05, 0.10, 0.20, 0.30, 0.5, 0.8, 1, 5, 10, 20, 50]
+    colors = ['b', 'r', 'g']
+    app_labels = ['minDCF(pi=0.5)', 'minDCF(pi=0.1)', 'minDCF(pi=0.9)'] 
+    for i, application in enumerate(applications):
+        DCFs = []
+        pi, Cfn, Cfp = application
+        classPriors = [pi, 1-pi]
+        for C in Cs:
+            scores = util.k_folds(folds, folds_labels, k, svm.train_non_linear_SVM, kernel='poly', C=C, d=degree, c=1)
+            scores = numpy.hstack(scores)
+            minDCF = dcf.compute_min_DCF(scores, numpy.hstack(folds_labels), pi, Cfn, Cfp)
+            DCFs.append(minDCF)
+        DCFs = numpy.array(DCFs)
+        plt.ylim(0, 1)
+        plt.title(f"DCF for Poly(d={int(degree)}) SVM ({balanced_})")
+        plt.xscale('log')
+        plt.xlabel('C')
+        plt.ylabel('DCF')
+        plt.plot(Cs, DCFs.ravel(), color=colors[i], label=app_labels[i])
+        plt.legend()
+    plt.save_fig(PATH, format="png")
     plt.show()
 
 def plot_min_DCF_RBFsvm(folds, folds_labels, k, gammas):
+    PATH = "./plots/SVM/RBF-minDCF.png"
     Cs = [0.005, 0.01,0.02,0.05, 0.08, 0.10, 0.20, 0.30, 0.5, 0.8, 1, 3, 5, 10, 20, 50]
     colors = ['b', 'r', 'g']
     app_labels = ['log(\u03BB)=-1', 'log(\u03BB)=-2', 'log(\u03BB)=-3'] 
@@ -178,23 +211,31 @@ def plot_min_DCF_RBFsvm(folds, folds_labels, k, gammas):
             DCFs.append(minDCF)
         DCFs = numpy.array(DCFs)
         plt.ylim(0, 1)
+        plt.title("DCF for RBF kernel SVM")
         plt.xscale('log')
         plt.xlabel('C')
-        plt.ylabel('DCF for linear SVM')
+        plt.ylabel('DCF')
         plt.plot(Cs, DCFs.ravel(), color=colors[i], label=app_labels[i])
         plt.legend()
+    plt.save_fig(PATH, format="png")
     plt.show()
 
-def plot_minDCF_GMM_hist(DCFs, G):
+def plot_minDCF_GMM_hist(DCFsA, DCFsB, G, filename='plot'):
     labels = list(map(lambda val:2**val, range(G)))
     x = numpy.arange(len(labels))
     width = 0.35
+    path = f"./plots/GMM/{filename}.png"
+    
 
     fig, ax = plt.subplots()
-    ax.bar(x - width/2, DCFs, width, label='GMM with Z-normalization')
+    ax.bar(x - width/2, DCFsA, width, label='GMM with Z-normalization')
+    ax.bar(x + width/2, DCFsB, width, label='GMM with raw features')
     ax.set_ylabel('DCF')
     ax.set_xticks(x, labels)
     ax.legend()
 
     fig.tight_layout()
+    plt.savefig(path, format='png')
+
     plt.show()
+    

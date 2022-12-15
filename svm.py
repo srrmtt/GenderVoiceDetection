@@ -3,7 +3,7 @@ import scipy
 import utility
 
 import utility as util
-def train_SVM_linear(DTR, DTE, LTR, params, K = 1):
+def train_SVM_linear(DTR, DTE, LTR, params, K = 0):
     C = params.setdefault('C', 0.1)
     balanced_classes = params.setdefault('balanced', False)
     priors = params.setdefault('priors', [0.5, 0.5])
@@ -35,8 +35,8 @@ def train_SVM_linear(DTR, DTE, LTR, params, K = 1):
     if balanced_classes:
         pi_T_emp = (LTR == 1).sum() / LTR.size
         pi_F_emp = 1 - pi_T_emp
-        C_T = priors[0] / pi_T_emp
-        C_F = priors[1] / pi_F_emp
+        C_T = C * (priors[0] / pi_T_emp)
+        C_F = C*(priors[1] / pi_F_emp)
 
         bounds = [(0, C_T) if lab == 1 else (0, C_F) for lab in LTR ]
     else:
@@ -45,7 +45,7 @@ def train_SVM_linear(DTR, DTE, LTR, params, K = 1):
         LDual,
         numpy.zeros(DTR.shape[1]),
         bounds= bounds,
-        factr=0.0,
+        factr=1.0,
         maxiter=100000,
         maxfun=100000,
     )
@@ -78,7 +78,12 @@ def RBF_score(xt, DTR, alpha, Z, gamma):
             score += alpha[i] * Z[i] * RBF_sample(DTR[:, i], xt, gamma)
     return score
 
-
+def compute_RBFSVM_score_matrix(DTR, DTE, Z, alpha_opt, K, gamma):
+    exp_dist = numpy.zeros((DTR.shape[1], DTE.shape[1]))
+    for i in range(DTR.shape[1]):
+        for j in range(DTE.shape[1]):
+            exp_dist[i][j] += numpy.exp(-gamma * numpy.linalg.norm(DTR[:, i:i+1] - DTE[:, j:j+1]) ** 2) + (K)**2
+    return (util.vcol(alpha_opt) * util.vcol(Z) * (exp_dist)).sum(0)
 # --- poly kernel ---
 
 def poly_sample(x1, x2, c, d):  
@@ -103,10 +108,12 @@ def poly_score(xt, DTR, alpha, Z, d, c):
 
 
 
-def train_non_linear_SVM(DTR, DTE, LTR, params):
+def train_non_linear_SVM(DTR, DTE, LTR, params, balanced=False):
     C = params.setdefault('C', 1)
     kernel = params.setdefault('kernel', 'rbf')
-    K = params.setdefault('K', 0)
+    K = params.setdefault('K', 1)
+    balanced_classes = params.setdefault('balanced', False)
+    priors = params.setdefault('priors', [0.5, 0.5])
 
     if kernel == 'rbf':
         gamma = params.setdefault('gamma', 1.0)
@@ -137,12 +144,21 @@ def train_non_linear_SVM(DTR, DTE, LTR, params):
         loss, grad = JDual(alpha)
         return -loss, -grad
 
+    if balanced_classes:
+        pi_T_emp = (LTR == 1).sum() / LTR.size
+        pi_F_emp = 1 - pi_T_emp
+        C_T = C * (priors[0] / pi_T_emp)
+        C_F = C*(priors[1] / pi_F_emp)
+
+        bounds = [(0, C_T) if lab == 1 else (0, C_F) for lab in LTR ]
+    else:
+        bounds = [(0,C)] * DTR.shape[1]
     
     alphaStar, _x, _y = scipy.optimize.fmin_l_bfgs_b(
         LDual,
         numpy.zeros(DTR.shape[1]),
-        bounds=[(0,C)] * DTR.shape[1],
-        factr=0.0,
+        bounds=bounds,
+        factr=100.0,
         maxiter=100000,
         maxfun=100000,
     )
@@ -151,9 +167,11 @@ def train_non_linear_SVM(DTR, DTE, LTR, params):
 
     print(JDual(alphaStar)[0]) 
     scores = []
+
+    if kernel == 'rbf':
+        return compute_RBFSVM_score_matrix(DTR, DTE, Z, alphaStar, K, gamma)
+        
     for t in range(DTE.shape[1]):
-        if kernel == 'rbf':
-            score = RBF_score(DTE[:, t], DTR, alphaStar, Z, 1.0)
         if kernel == 'poly':
             score = poly_score(DTE[:, t], DTR, alphaStar, Z, d, c)
         scores.append(score)
