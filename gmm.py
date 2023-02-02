@@ -41,7 +41,6 @@ def mcol(v):
 
 
 def GMM_tied(GMM, Z_vec, N):
-
     tied_Sigma = numpy.zeros((GMM[0][2].shape[0], GMM[0][2].shape[0]))
     for g in range((len(GMM))):
         tied_Sigma += GMM[g][2] * Z_vec[g]
@@ -52,13 +51,13 @@ def GMM_tied(GMM, Z_vec, N):
 
 def GMM_EM(X, gmm, full_cov=True, threshold=1e-6, psi=0.01,tied=False):
     # ll of the current gmm
-    print("Model full_cov", full_cov, "--- Tied:", tied)
     llNew = None
     llOld = None
+    
     lastll = 0
     G = len(gmm)
     N = X.shape[1]
-    
+    i = 0
     #if tied:
     #    return _GMM_EM_tied(X, gmm)
     # this difference represents the difference between the two likelihoods
@@ -66,6 +65,7 @@ def GMM_EM(X, gmm, full_cov=True, threshold=1e-6, psi=0.01,tied=False):
         llOld = llNew
         SJ = numpy.zeros((G, N))
         ##### compute the matrix of Joint density like in the previous function####
+       
         for g in range(G):
             SJ[g, :] = logpdf_GAU_ND_Opt(X, gmm[g][1], gmm[g][2]) + numpy.log(gmm[g][0])
         # marginal probability (like MVG classifier)
@@ -93,79 +93,48 @@ def GMM_EM(X, gmm, full_cov=True, threshold=1e-6, psi=0.01,tied=False):
             # covariance matrix
             Sigma = S/Z - numpy.dot(mu, mu.T)
             #print('Sigma: ',Sigma)
-            if not full_cov:
-                Sigma = Sigma * numpy.eye(Sigma.shape[0])
-            if tied:
-                sigma_sum += Z*Sigma
             
+            if tied:
+                # compute sum of all covariances
+                sigma_sum += Z*Sigma
+                gmmNew.append((w, mu))
             else:
+                # full covariance case
+                if not full_cov:
+                    # diagonal case
+                    Sigma = Sigma * numpy.eye(Sigma.shape[0])
                 U, s, _ = numpy.linalg.svd(Sigma)
                 s[s < psi] = psi
                 Sigma = numpy.dot(U, mcol(s)*U.T)
-                
-                    
-
-            gmmNew.append((w, mu, Sigma))
+                gmmNew.append((w, mu, Sigma))
         if tied:
-            Sigma = sigma_sum / G
+            gmm = gmmNew
+            Sigma = sigma_sum / N
+            if not full_cov:
+                Sigma = Sigma * numpy.eye(Sigma.shape[0])
+
             U, s, _ = numpy.linalg.svd(Sigma)
             s[s < psi] = psi
             Sigma = numpy.dot(U, mcol(s)*U.T)
-        
-            
-                
+            tied_gmm = []
+            for g in gmm:
+                (w, mu) = g
+                tied_gmm.append((w, mu, Sigma))
+            gmm = tied_gmm
            
-        
-        gmm = gmmNew
+        else:
+            gmm = gmmNew
         # check if the llNew in increasing used for bugs
         if(llNew < lastll and lastll != 0):
             #print("ERROR decreasing ll")
             pass
         lastll = llNew
         #print("new ll:", llNew)
-    
+        i+=1
     #print("diff:", llNew - llOld)
     return gmm
-def _GMM_EM_tied(X, gmm):
-        print("call the new function")
-        ll_new = None
-        ll_old = None
-        G = len(gmm)
-        N = X.shape[1]
-        
-        psi = 0.01
-        
-        while ll_old is None or ll_new-ll_old>1e-6:
-            ll_old = ll_new
-            SJ = numpy.zeros((G, N))
-            for g in range(G):
-                SJ[g, :] = logpdf_GAU_ND_Opt(X, gmm[g][1], gmm[g][2]) + numpy.log(gmm[g][0])
-            SM = scipy.special.logsumexp(SJ, axis=0)
-            ll_new = SM.sum() / N
-            P = numpy.exp(SJ - SM)
-            
-            gmm_new = []
-            summatory = numpy.zeros((X.shape[0], X.shape[0]))
-            for g in range(G):
-                gamma = P[g, :]
-                Z = gamma.sum()
-                F = (mrow(gamma)*X).sum(1)
-                S = numpy.dot(X, (mrow(gamma)*X).T)
-                w = Z/N
-                mu = mcol(F/Z)
-                sigma = S/Z - numpy.dot(mu, mu.T)
-                summatory += Z*sigma
-                gmm_new.append((w, mu, sigma))
-            #tying
-            sigma = summatory / G
-            #constraint
-            U, s, _ = numpy.linalg.svd(sigma)
-            s[s<psi] = psi
-            sigma = numpy.dot(U, mcol(s)*U.T)
-            gmm = gmm_new
-            #print(ll_new)
-        #print(ll_new-ll_old)
-        return gmm
+
+
 def empirical_cov(D):
     mu = D.mean(1)
     #print(mu,mu.shape)
@@ -248,3 +217,25 @@ def GMM(DTR, DTE, LTR, params={}):
     print("llrs shape", llrs.shape)
     return llrs
 
+def build_filename(minDCF: bool, preprocessing: bool, components: int, cov_type: str) -> str:
+    _ext = ".bin" if minDCF else ".npy"
+    _minDCF = "minDCFs" if minDCF else "llrs"
+    _preprocessing = "z_norm" if preprocessing else "raw"
+    filename = f"{_minDCF}_{_preprocessing}-gmm-{components}-{cov_type}{_ext}"
+    return filename
+
+def build_path(minDCF: bool, preprocessing: bool, components: int, cov_type: str, training: bool= True) -> str:
+    ROOT = f"./results/gmm"
+    if not training:
+        ROOT += "/experimental"
+    filename = build_filename(minDCF, preprocessing, components, cov_type)
+    return f"{ROOT}/{filename}"
+
+def load_results(minDCF:bool, preprocessing:bool, components:int, cov_type:str, application:tuple= (0.5, 1, 1), training:bool= True):
+    # get training results
+    PATH = build_path(minDCF, preprocessing, components, cov_type, training)
+    if minDCF:
+        ret = util.pickle_load(PATH)[application]
+    else:
+        ret = numpy.load(PATH)
+    return ret
